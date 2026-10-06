@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+build/
+dist/
+dist_new/
+*.spec
+*.log
+_icon_*.png
+*.mp4
+!docs/*.mp4
+.idea/
+.vscode/
