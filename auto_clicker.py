@@ -1077,9 +1077,23 @@ def cli_main(argv):
         print("x=%d y=%d" % cursor_pos())
         return 0
     if a.selftest:
-        print(selftest())
+        _safe_print(selftest())
         return 0
     return None
+
+
+def _safe_print(s):
+    """打印可能被 GBK 控制台拒绝的文本。
+
+    坑：窗口标题里可能含零宽字符（U+200B等），中文Windows 控制台
+    默认编码 GBK，遇到这些字符 print 直接抛 UnicodeEncodeError，
+    整个 --selftest 崩掉。降级成replace 后不可见字符变问号，不影响诊断。
+    """
+    try:
+        print(s)
+    except UnicodeEncodeError:
+        enc = getattr(sys.stdout, "encoding", None) or "gbk"
+        print(s.encode(enc, "replace").decode(enc, "replace"))
 
 
 def main():
@@ -1091,8 +1105,9 @@ def main():
     setup_dpi()
     root = tk.Tk()
     import ui_kit
-    ui_kit.init_ui_scale()
+    ui_kit.init_ui_scale(root)      # 传 root 才能拿到该显示器真实 DPI
     ui_kit.apply_tk_scaling(root)
+    ui_kit.apply_base_fonts(root)   # 命名默认字体也要缩放
     root.report_callback_exception = lambda exc, val, tb: (
         messagebox.showerror("程序错误", "".join(traceback.format_exception(exc, val, tb)))
         or traceback.print_exception(exc, val, tb))

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
   <assemblyIdentity version="2.0.0.0" processorArchitecture="amd64"
-                    name="GpuSwitcher" type="win32"/>
-  <description>GPU 切换助手</description>
+                    name="AutoClicker" type="win32"/>
+  <description>极速连点器</description>
   <application xmlns="urn:schemas-microsoft-com:asm.v3">
     <windowsSettings>
       <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
