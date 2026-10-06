@@ -1,7 +1,0 @@
-修正 LICENSE / manifest 归属 + GBK 控制台自检崩溃
-
-- LICENSE: 版权归属由「GpuSwitcher contributors」改为 xavier111222
-- app.manifest: assemblyIdentity name 与 description 改为本项目（AutoClicker / 极速连点器）
-- main(): init_ui_scale() 补传 root，取该显示器真实 DPI；补调apply_base_fonts()
-- 新增 _safe_print()：中文 Windows 控制台默认 GBK，窗口标题含零宽字符(U+200B)
-  时 print 抛 UnicodeEncodeError 导致 --selftest 整体崩溃，降级为 replace 输出
