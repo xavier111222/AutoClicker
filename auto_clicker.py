@@ -32,7 +32,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 APP_NAME = "极速连点器"
-APP_VERSION = "1.0.1"
+APP_VERSION = "1.0.2"
 
 # ---------------------------------------------------------------- Win32 输入
 
@@ -113,6 +113,11 @@ class ClickEngine:
         self.state = "idle"          # idle / countdown / running
         self.clicks = 0
         self.started = 0.0
+        # 真正开始点击的时刻。坑：倒计时期间 clicks 恒为 0，若用 self.started
+        # 算速度，倒计时的 3~10 秒会被算进分母，显示的速度明显偏低；
+        # 而第一个 tick 时 clicks=1、耗时≈0，速度会飙到几千次再回落 —— 看着像乱跳。
+        self.running_since = 0.0
+        self._samples = []            # (时刻, 累计点击数) 滚动窗口，算平滑速度
         self.on_event = lambda *a: None
 
     # -- 参数
@@ -132,6 +137,8 @@ class ClickEngine:
         self.clicks = 0
         self.state = "countdown"
         self.started = time.perf_counter()
+        self.running_since = 0.0
+        self._samples = []
         self._cd_left = countdown
         self.thread = threading.Thread(target=self._loop, daemon=True)
         self.thread.start()
@@ -149,6 +156,22 @@ class ClickEngine:
             self.on_event(kind, *args)
         except Exception:  # noqa: BLE001
             traceback.print_exc()
+
+    def _speed(self, now):
+        """最近约 1.2 秒的滑动窗口速度（次/秒）。
+
+        不用「总数 / 总时长」：那样刚开始时 clicks 少、分母也小，数字会剧烈跳动；
+        滑动窗口既能反映瞬时速度，又足够平滑。
+        """
+        self._samples.append((now, self.clicks))
+        cut = now - 1.2
+        while len(self._samples) > 2 and self._samples[0][0] < cut:
+            self._samples.pop(0)
+        t0, c0 = self._samples[0]
+        dt = now - t0
+        if dt < 0.05:                 # 窗口太窄，先不给结论
+            return 0.0
+        return (self.clicks - c0) / dt
 
     def _do_click(self):
         c = self.cfg
@@ -178,8 +201,10 @@ class ClickEngine:
                 self._emit("stopped", self.clicks)
                 return
             self.state = "running"
+            self.running_since = time.perf_counter()
+            self._samples = [(self.running_since, 0)]
             self._emit("started", c)
-            next_t = time.perf_counter()
+            next_t = self.running_since
             while not self.stop_flag.is_set():
                 self._do_click()
                 limit = c["count"]
@@ -188,11 +213,14 @@ class ClickEngine:
                     self._emit("finished", self.clicks)
                     return
                 next_t += c["interval"]
-                delay = next_t - time.perf_counter()
+                now = time.perf_counter()
+                delay = next_t - now
                 if delay < -1.0:          # 落后太多（例如系统休眠后）重新对时
-                    next_t = time.perf_counter()
+                    next_t = now
                     delay = 0
-                self._emit("tick", self.clicks, time.perf_counter() - self.started)
+                # 计时只统计真正在点击的时间，不含倒计时
+                self._emit("tick", self.clicks, now - self.running_since,
+                           self._speed(now))
                 self.stop_flag.wait(delay)
             self.state = "idle"
             self._emit("stopped", self.clicks)
@@ -229,7 +257,11 @@ class ClickerApp(AppBase):
         self.stat_clicks = tk.StringVar(value="0")
         self.stat_cps = tk.StringVar(value="0.0")
         self.stat_time = tk.StringVar(value="0:00")
-        self._stat_win = None
+        #坑：这里曾用 `self._stat_win` 保存 Tk 根窗口，却又调`.is_alive()`
+        # （那是threading.Thread 的方法）→ 停止连点时抛
+        # AttributeError: '_tkinter.tkapp' object has no attribute 'is_alive'。
+        # 统计区现在就在主窗口里，用布尔标记即可，别再假装有独立窗口。
+        self._stat_shown = False
         self._hotkey_down = False
         # 流程宏
         self.macro_eng = macro.MacroEngine()
@@ -914,8 +946,7 @@ class ClickerApp(AppBase):
         self.state_pill.set("● 就绪", THEME["text3"])
         self.status_var.set("就绪")
         self.stat_cps.set("0.0")
-        if self._stat_win and self._stat_win.is_alive():
-            self._stat_win = None
+        self._stat_shown = False
 
     def _on_engine(self, kind, *args):
         """引擎线程事件 → 主线程"""
@@ -925,8 +956,7 @@ class ClickerApp(AppBase):
             self.ui(self.state_pill.set, "● 连点中", THEME["green"])
             self.ui(self._start_stat_window)
         elif kind == "tick":
-            clicks, elapsed = args
-            cps = clicks / elapsed if elapsed > 0 else 0
+            clicks, elapsed, cps = args
             self.ui(self.stat_clicks.set, str(clicks))
             self.ui(self.stat_cps.set, "%.1f" % cps)
             self.ui(self.stat_time.set, fmt_dur(elapsed))
@@ -941,9 +971,9 @@ class ClickerApp(AppBase):
             self.ui(self._reset_ui)
 
     def _start_stat_window(self):
-        if self._stat_win and self._stat_win.is_alive():
+        if self._stat_shown:
             return
-        self._stat_win = self.root
+        self._stat_shown = True
 
     def on_ready(self):
         self.root.after(30, self._poll_hotkey)
