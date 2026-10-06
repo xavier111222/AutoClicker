@@ -98,7 +98,10 @@ def screen_size():
             ctypes.windll.user32.GetSystemMetrics(1))
 
 
-HOTKEYS = {("F%d" % i): 0x70 + i for i in range(1, 13)}
+# 坑：VK_F1 = 0x70，正确的换算是 0x70 + i - 1。
+# 之前写成 0x70 + i，整体偏移一位：F6 存成了 0x76（那是 F7），
+# 于是「按 F6 没反应」，而流程宏热键硬编码的 0x76(F7) 又和它撞车。
+HOTKEYS = {("F%d" % i): 0x70 + i - 1 for i in range(1, 13)}
 BUTTONS = {0: "左键", 1: "右键", 2: "中键"}
 
 
