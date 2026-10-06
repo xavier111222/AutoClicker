@@ -296,6 +296,183 @@ def rrect(canvas, x1, y1, x2, y2, r, **kw):
     return canvas.create_polygon(rrect_points(x1, y1, x2, y2, r), **kw)
 
 
+class Field(tk.Frame):
+    """Apple 风格输入框（Entry / Spinbox 统一外观）。
+
+    为什么不直接用 tk.Entry：它只有 relief="solid" 的直角灰边，
+    高 DPI 下跟整体圆角卡片完全不搭；ttk.Entry 在 clam 主题下
+    又是另一种灰色方块，且行高受 element 限制压不住。
+
+    实现：Frame 做容器（Entry 需要真正的 widget 父级），
+    内部叠一个 Canvas 画圆角描边 + 透明边框的 tk.Entry。
+    **圆角必须靠 Canvas**——Frame 的 highlightthickness 只能画直角矩形，
+    跟 AppleButton / RoundedFrame 对不上。
+    Spinbox 通过 spin=True 复用同一外观。
+    """
+
+    def __init__(self, master, textvariable=None, width_chars=8,
+                 font=None, spin=False, from_=None, to=None, wrap=False,
+                 justify="left", bg=None, radius=None, on_enter=None):
+        self.bg = bg or THEME["card"]
+        self.font = font or F(11)
+        self.radius = px(8 if radius is None else radius)
+        self.height_ = px(32)
+        self._focused = False
+        # 坑：**绝对不要把自定义属性命名成 _w**。tkinter.Misc内部用 self._w
+        # 存控件的 Tcl 路径名（形如 .!frame.!canvas），一被覆盖成数字，
+        # 控件就从 Tcl 树里"消失"了：winfo_exists() 变0、界面元素凭空不见，
+        # 而且不报任何错。宽度缓存请用别的名字。
+        # 另：pack_propagate(False) 会禁掉「按内容算宽」，不显式给 width
+        # 容器会塌成 1px（Entry 一起被压没）。
+        self._auto_w = self._measure(width_chars)
+        self._box_w = self._auto_w
+        tk.Frame.__init__(self, master, bg=self.bg, highlightthickness=0, bd=0,
+                           width=self._auto_w, height=self.height_)
+        self.pack_propagate(False)
+
+        # 坑：叠放顺序 + 几何管理必须统一用 place。
+        #   · Canvas 有背景色，必须先创建并place在最底层，只画描边
+        #   · Entry 用 place（不是 pack）叠在 Canvas 之上
+        #   · 坑：同一父级里混用 pack 和 place，在 pack_propagate(False)
+        #     的 Frame 上会导致子控件在 <Configure> 期间被 Tcl 销毁
+        #     （表现为 winfo_exists() 变0、界面元素凭空消失，且无任何报错）
+        self._cv = tk.Canvas(self, bg=self.bg, highlightthickness=0, bd=0)
+        self._cv.place(x=0, y=0, relwidth=1, relheight=1)
+        self._cv.bind("<Button-1>", lambda e: self.widget.focus_set())
+
+        inner = dict(textvariable=textvariable, font=self.font,
+                     bg=self.bg, relief="flat", bd=0,
+                     highlightthickness=0, insertbackground=THEME["text"],
+                     insertwidth=max(1, px(2)), justify=justify,
+                     selectbackground=THEME["blue"],
+                     selectforeground="#FFFFFF")
+        if wrap:
+            inner["wrap"] = "char"
+        if spin:
+            # 坑：tk.Spinbox **不支持** -buttonrelief（那是 ttk.Spinbox 的选项），
+            # 传了直接抛 TclError: unknown option。
+            # 箭头立体感只能靠 borderwidth=0 + buttonbackground 压平。
+            self._spin_w = px(18)
+            self.widget = tk.Spinbox(
+                self, from_=from_, to=to, width=width_chars,
+                buttonbackground=self.bg, borderwidth=0,
+                activebackground=self.bg, **inner)
+        else:
+            self._spin_w = px(8)
+            self.widget = tk.Entry(self, width=width_chars, **inner)
+        self._place_entry()
+        self.redraw()
+
+        if on_enter:
+            self.widget.bind("<Return>", lambda e: on_enter())
+        self.bind("<Configure>", self._on_cfg)
+        self.widget.bind("<FocusIn>", lambda e: self._set_focus(True))
+        self.widget.bind("<FocusOut>", lambda e: self._set_focus(False))
+
+    def _place_entry(self):
+        try:
+            self.widget.place(x=px(9), y=px(4),
+                              width=max(1, self._box_w - px(9) - self._spin_w),
+                              height=max(1, self.height_ - px(8)))
+        except tk.TclError:
+            pass
+
+    def _measure(self, width_chars):
+        """按字体度量估算容器宽度。
+
+        Entry/Spinbox 的 width 是「字符数」，但 pack_propagate(False)
+        之后 Frame 不再跟随内容，必须自己算出像素宽。
+        """
+        pad = px(9) + px(8) + px(4)
+        try:
+            cw = tkfont.Font(font=self.font).measure("0") or px(8)
+        except Exception:  # noqa: BLE001
+            cw = px(8)
+        return cw * max(1, width_chars) + pad
+
+    def redraw(self):
+        """重画圆角描边。focused 时用主题色。
+
+        坑：Canvas 用的是 place(relwidth=1)，它拿到真实宽度比Frame 晚一拍，
+        首次 <Configure> 时常只有 1px，此时直接 return 会留下「只有左边框」的
+        残影。所以宽度不足时排一个 after_idle 重试。
+        """
+        try:
+            cv = self._cv
+            w = cv.winfo_width()
+            h = cv.winfo_height()
+            if w <= 1 or h <= 1:
+                # 退回到 Frame 自身的请求宽度，至少把框画出来
+                w = max(w, self._box_w)
+                h = max(h, self.height_)
+                if w <= 1 or h <= 1:
+                    return
+            cv.delete("all")
+            col = THEME["blue"] if self._focused else THEME["border"]
+            rrect(cv, px(1), px(1), w - px(2), h - px(2), self.radius,
+                  fill="", outline=col, width=px(2))
+        except tk.TclError:
+            pass
+
+    def _set_focus(self, focused):
+        self._focused = focused
+        self.redraw()
+
+    def _on_cfg(self, _evt):
+        # 坑：控件销毁时仍会收到 <Configure>，此时 winfo_width() 本身就会抛
+        # TclError: bad window path name。整段兜住，否则退出时刷一屏红字。
+        # 每次 Configure 都重画（不比较宽度）：容器被拉伸时右/下边框要跟着走，
+        # 只在宽度变化时重画会留下一侧缺边的残影。
+        try:
+            w = self.winfo_width()
+            if w > 1:
+                changed = w != self._box_w
+                self._box_w = w
+                if changed:
+                    self._place_entry()
+                self.redraw()
+                # place(relwidth=1) 的 Canvas 尺寸比容器晚一拍，
+                # 布局稳定后再补一次，边框才完整。
+                if changed:
+                    self.after_idle(self._redraw_later)
+        except tk.TclError:
+            pass
+
+    def _redraw_later(self):
+        try:
+            if self.winfo_exists():
+                self._place_entry()
+                self.redraw()
+        except tk.TclError:
+            pass
+
+    # -- 代理 tk.Entry 接口，调用方无需关心外层容器
+    def get(self):
+        return self.widget.get()
+
+    def set(self, v):
+        self.widget.delete(0, "end")
+        self.widget.insert(0, v)
+
+    def delete(self, *args):
+        return self.widget.delete(*args)
+
+    def insert(self, *args):
+        return self.widget.insert(*args)
+
+    def selection_range(self, *args):
+        return self.widget.selection_range(*args)
+
+    def select_range(self, a, b):
+        return self.widget.selection_range(a, b)
+
+    def focus_set(self):
+        return self.widget.focus_set()
+
+    def icursor(self, pos):
+        return self.widget.icursor(pos)
+
+
 SHADOW_PAD = 5
 
 # UI 缩放因子：运行时按系统 DPI 设置（96 DPI 时为 1.0）。
@@ -552,7 +729,13 @@ class AppleButton(tk.Canvas):
 class SegmentedControl(tk.Canvas):
     """iOS 风格分段控件（带滑动 thumb）
 
-    坑：默认参数不能写 px(340)——import 时求值会冻结在 UI_SCALE=1.0。
+    坑 1：默认参数不能写 px(340)——import 时求值会冻结在 UI_SCALE=1.0。
+    坑 2：command 的回调**参数个数不固定**——历史代码里两种写法都有：
+             def on_unit(i): ...            # 只关心下标
+             def on_segment(i, label): ...  # 还要用到文案
+          统一按 (i, label) 调用会让只接受 1 个参数的回调抛
+          TypeError，点击分段控件直接报「程序错误」。
+          → 用_fire_command() 按签名自动适配，两种都能用。
     """
 
     def __init__(self, master, options, command=None, width=None, height=None,
@@ -586,14 +769,31 @@ class SegmentedControl(tk.Canvas):
             self.width_ = w
             self.draw()
 
+    def _fire(self, i):
+        """按回调签名适配调用：支持 (i) 与 (i, label) 两种写法。"""
+        if not self.command:
+            return
+        label = self.options[i]
+        try:
+            import inspect
+            sig = inspect.signature(self.command)
+            n = len([p for p in sig.parameters.values()
+                     if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)])
+        except (TypeError, ValueError):
+            n = 2                      # 取不到签名就按 2 参试
+        if n >= 2:
+            self.command(i, label)
+        else:
+            self.command(i)
+
     def select(self, i, fire=False):
         i = max(0, min(i, len(self.options) - 1))
         if i == self.index and self._shown == float(i):
             return
         self.index = i
         self._animate_to(float(i))
-        if fire and self.command:
-            self.command(i, self.options[i])
+        if fire:
+            self._fire(i)
 
     def _click(self, event):
         n = len(self.options)
@@ -601,8 +801,7 @@ class SegmentedControl(tk.Canvas):
         i = int(event.x // seg)
         if 0 <= i < n and i != self.index:
             self.select(i)
-            if self.command:
-                self.command(i, self.options[i])
+            self._fire(i)
 
     def _animate_to(self, target):
         if self._anim:

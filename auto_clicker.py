@@ -21,7 +21,7 @@ import time
 import traceback
 from datetime import datetime
 
-from ui_kit import (AppBase, AppleButton, F, Pill, RoundedFrame, ScrollFrame,
+from ui_kit import (AppBase, AppleButton, F, Field, Pill, RoundedFrame, ScrollFrame,
                     SegmentedControl, THEME, ToggleSwitch, open_uri, px,
                     setup_dpi)
 
@@ -32,7 +32,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 APP_NAME = "极速连点器"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.1"
 
 # ---------------------------------------------------------------- Win32 输入
 
@@ -313,11 +313,8 @@ class ClickerApp(AppBase):
         r1.pack(fill="x", pady=(px(0), px(10)))
         tk.Label(r1, text="点击间隔", bg=THEME["card"], fg=THEME["text"],
                  font=F(11)).pack(side="left")
-        e1 = tk.Entry(r1, textvariable=self.interval_val, width=8, font=F(11),
-                      relief="solid", bd=1, highlightthickness=1,
-                      highlightcolor=THEME["blue"],
-                      highlightbackground=THEME["border"])
-        e1.pack(side="left", padx=px(10), ipady=px(3))
+        e1 = Field(r1, textvariable=self.interval_val, width_chars=8, font=F(11))
+        e1.pack(side="left", padx=px(10))
         self.unit_seg = SegmentedControl(
             r1, ["毫秒", "秒", "分钟"], command=self._on_unit, width=px(220),
             height=px(34), bg=THEME["card"])
@@ -328,10 +325,8 @@ class ClickerApp(AppBase):
         r2.pack(fill="x", pady=(px(0), px(10)))
         tk.Label(r2, text="点击次数", bg=THEME["card"], fg=THEME["text"],
                  font=F(11)).pack(side="left")
-        tk.Entry(r2, textvariable=self.count_val, width=8, font=F(11), relief="solid",
-                 bd=1, highlightthickness=1, highlightcolor=THEME["blue"],
-                 highlightbackground=THEME["border"]).pack(side="left", padx=px(10),
-                                                           ipady=px(3))
+        Field(r2, textvariable=self.count_val, width_chars=8, font=F(11)).pack(
+            side="left", padx=px(10))
         tk.Label(r2, text="0 = 一直点，直到手动停止", bg=THEME["card"],
                  fg=THEME["text3"], font=F(9)).pack(side="left")
 
@@ -354,10 +349,8 @@ class ClickerApp(AppBase):
         r4.pack(fill="x")
         tk.Label(r4, text="随机偏移(px)", bg=THEME["card"], fg=THEME["text"],
                  font=F(11)).pack(side="left")
-        tk.Entry(r4, textvariable=self.jitter_val, width=8, font=F(11), relief="solid",
-                 bd=1, highlightthickness=1, highlightcolor=THEME["blue"],
-                 highlightbackground=THEME["border"]).pack(side="left", padx=px(10),
-                                                           ipady=px(3))
+        Field(r4, textvariable=self.jitter_val, width_chars=8, font=F(11)).pack(
+            side="left", padx=px(10))
         tk.Label(r4, text="每次点击在目标点附近随机抖动，可避免固定坐标被识别",
                  bg=THEME["card"], fg=THEME["text3"], font=F(9)).pack(side="left")
 
@@ -375,17 +368,12 @@ class ClickerApp(AppBase):
         r6.pack(fill="x")
         tk.Label(r6, text="X", bg=THEME["card"], fg=THEME["text2"],
                  font=F(10)).pack(side="left")
-        tk.Entry(r6, textvariable=self.pos_x, width=9, font=F(11, mono=True),
-                 relief="solid", bd=1, highlightthickness=1,
-                 highlightcolor=THEME["blue"],
-                 highlightbackground=THEME["border"]).pack(side="left",
-                                                           padx=px(6), ipady=px(3))
+        Field(r6, textvariable=self.pos_x, width_chars=9, font=F(11, mono=True)).pack(
+            side="left", padx=px(6))
         tk.Label(r6, text="Y", bg=THEME["card"], fg=THEME["text2"],
                  font=F(10)).pack(side="left", padx=(px(12), px(6)))
-        tk.Entry(r6, textvariable=self.pos_y, width=9, font=F(11, mono=True),
-                 relief="solid", bd=1, highlightthickness=1,
-                 highlightcolor=THEME["blue"],
-                 highlightbackground=THEME["border"]).pack(side="left", ipady=px(3))
+        Field(r6, textvariable=self.pos_y, width_chars=9, font=F(11, mono=True)).pack(
+            side="left")
         AppleButton(r6, "取当前鼠标位置", command=self.pick_pos, style="secondary",
                     width=px(140), height=px(32), radius=px(9),
                     font=F(10)).pack(side="left", padx=px(14))
@@ -413,9 +401,8 @@ class ClickerApp(AppBase):
         r8.pack(fill="x")
         tk.Label(r8, text="开始倒计时(秒)", bg=THEME["card"], fg=THEME["text"],
                  font=F(11)).pack(side="left")
-        tk.Spinbox(r8, from_=0, to=10, width=6, textvariable=self.countdown_val,
-                   font=F(11), relief="solid", bd=1, highlightthickness=1,
-                   highlightbackground=THEME["border"]).pack(side="left", padx=px(10))
+        Field(r8, textvariable=self.countdown_val, width_chars=6, font=F(11),
+              spin=True, from_=0, to=10).pack(side="left", padx=px(10))
         tk.Label(r8, text="倒计时结束自动开始，方便你把手放到目标位置",
                  bg=THEME["card"], fg=THEME["text3"], font=F(9)).pack(side="left")
 
@@ -432,12 +419,11 @@ class ClickerApp(AppBase):
         self.flow_pill.pack(side="left")
         tk.Label(row, text="重复轮数", bg=THEME["card"], fg=THEME["text3"],
                  font=F(10)).pack(side="right", padx=(px(8), px(6)))
-        self.flow_repeat = tk.Spinbox(row, from_=1, to=9999, width=6,
-                                      textvariable=self.flow_repeat_var,
-                                      font=F(11), relief="solid", bd=1,
-                                      highlightthickness=1,
-                                      highlightbackground=THEME["border"],
-                                      state="readonly").pack(side="right")
+        self.flow_repeat = Field(row, textvariable=self.flow_repeat_var,
+                                 width_chars=6, font=F(11), spin=True,
+                                 from_=1, to=9999)
+        self.flow_repeat.pack(side="right")
+        self.flow_repeat.widget.configure(state="readonly", readonlybackground=THEME["card"])
         self.flow_hk_pill = Pill(row, "F7", THEME["green"], bg=THEME["card"], size=11)
         self.flow_hk_pill.pack(side="right", padx=(px(10), px(4)))
         tk.Label(row, text="启动热键", bg=THEME["card"], fg=THEME["text3"],
@@ -476,9 +462,7 @@ class ClickerApp(AppBase):
                                       padx=(0, px(14)))
 
         def _ent(parent, r, c, w=8):
-            e = tk.Entry(parent, width=w, font=F(10), relief="solid", bd=1,
-                         highlightthickness=1,
-                         highlightbackground=THEME["border"])
+            e = Field(parent, width_chars=w, font=F(10))
             e.grid(row=r * 2 + 1, column=c, sticky="ew", padx=(0, px(14)),
                    pady=(px(2), px(10)))
             return e
@@ -509,15 +493,11 @@ class ClickerApp(AppBase):
                   pady=(px(2), px(10)))
         tk.Label(pick, text="X", bg=THEME["card"], fg=THEME["text3"],
                  font=F(9)).grid(row=0, column=0, sticky="w", padx=(0, px(14)))
-        self.ed_x = tk.Entry(pick, width=7, font=F(10), relief="solid", bd=1,
-                             highlightthickness=1,
-                             highlightbackground=THEME["border"])
+        self.ed_x = Field(pick, width_chars=7, font=F(10))
         self.ed_x.grid(row=1, column=0, sticky="w")
         tk.Label(pick, text="Y", bg=THEME["card"], fg=THEME["text3"],
                  font=F(9)).grid(row=0, column=1, sticky="w", padx=(px(6), px(8)))
-        self.ed_y = tk.Entry(pick, width=7, font=F(10), relief="solid", bd=1,
-                             highlightthickness=1,
-                             highlightbackground=THEME["border"])
+        self.ed_y = Field(pick, width_chars=7, font=F(10))
         self.ed_y.grid(row=1, column=1, sticky="w")
         AppleButton(pick, "取点", command=self.flow_pick_point, style="secondary",
                     width=px(54), height=px(26), radius=px(8), font=F(10),
@@ -556,9 +536,7 @@ class ClickerApp(AppBase):
         g2.pack(fill="x", pady=(px(0), px(10)))
         tk.Label(g2, text="输入文本", bg=THEME["card"], fg=THEME["text3"],
                  font=F(9)).pack(side="left")
-        self.ed_text = tk.Entry(g2, font=F(10), relief="solid", bd=1,
-                                highlightthickness=1,
-                                highlightbackground=THEME["border"])
+        self.ed_text = Field(g2, font=F(10))
         self.ed_text.pack(side="left", fill="x", expand=True,
                           padx=(px(8), 0))
 

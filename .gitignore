@@ -13,3 +13,6 @@ _icon_*.png
 .idea/
 .vscode/
 _commit.txt
+_shot.py
+_shotlib.py
+SHA256SUMS.txt
