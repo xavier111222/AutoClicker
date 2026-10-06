@@ -1,5 +1,7 @@
 # 极速连点器（AutoClicker）
 
+[简体中文](README.md) | [English](README_EN.md)
+
 一个 **独立单文件** 的 Windows 小工具：把鼠标点击自动化。
 设定间隔后，热键一按就开始连点；也可以编排**多步骤流程宏**，
 并对**任意应用窗口**（含后台窗口）连点。
@@ -12,6 +14,17 @@
 | 连点控制 | 参数设置 | 流程宏 |
 | --- | --- | --- |
 | ![主界面](docs/screenshot-main.png) | ![参数](docs/screenshot-params.png) | ![流程](docs/screenshot-flow.png) |
+
+---
+
+## 同系列工具
+
+| 项目 | 说明 |
+| --- | --- |
+| [GPU 切换助手 GpuSwitcher](https://github.com/xavier111222/GpuSwitcher) | 独显/集显一键切换 + 逐程序指定显卡 |
+| [屏幕录制器 ScreenRecorder](https://github.com/xavier111222/ScreenRecorder) | 全屏 / 框选 / 应用窗口 / 自动识别四种录制区域 |
+
+三个项目共用同一套高 DPI UI 骨架（`ui_kit.py`），界面风格一致。
 
 ---
 
